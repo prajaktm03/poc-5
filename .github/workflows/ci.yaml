@@ -4,7 +4,7 @@ name: CI Pipeline
 
 on:
   #push:
-  workflow_dispatch
+  workflow_dispatch:
     branches:
       - main
   #pull_request:
