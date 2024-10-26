@@ -60,3 +60,9 @@ jobs:
             --service cc-demo-app-service \
             --force-new-deployment \
             --task-definition ${{ env.TASK_DEFINITION_ARN }}
+
+      - name: Debug Print fetched IMAGE_TAG
+        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
+        
+
+  
