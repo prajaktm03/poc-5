@@ -1,0 +1,47 @@
+
+name: CI Pipeline
+
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Define the jobs that will run
+jobs:
+  build:
+    # The environment where this job runs
+    runs-on: ubuntu-latest
+
+    # Define environment variables if needed
+    env:
+      NODE_ENV: production
+      BUILD_NUMBER: ${{ github.run_number }}
+
+    # List the steps
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build the project
+        run: npm run build
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: ./dist
