@@ -1,14 +1,13 @@
-name: Deploy Latest Docker Image to ECS
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - main  # Trigger the workflow on pushes to the main branch
-  workflow_dispatch:  # Allow manual triggering of the workflow
+      - main  # Trigger on pushes to the main branch
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest  # Use a GitHub-hosted runner
+  build:
+    runs-on: ubuntu-latest  # Use GitHub-hosted runner
 
     steps:
       - name: Checkout code
@@ -23,52 +22,39 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1  # Log in to ECR
-        
-      - name: List Task Definitions
-        id: list_tasks
-        run: |
-          echo "Listing all task definitions..."
-          aws ecs list-task-definitions --max-results 10
+        uses: aws-actions/amazon-ecr-login@v1  # Log in to ECR to push images
 
-      - name: Get Latest Image Digest
-        id: get_image_digest
+      - name: Build Docker image
         run: |
-          echo "Checking for task definition: persistentpoc-task"
-          IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
-          if [ -z "$IMAGE_DIGEST" ]; then
-            echo "Error: Unable to fetch image digest."
-            exit 1
-          fi
-          echo "Latest Image Digest: $IMAGE_DIGEST"
-          echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV  # Set the image digest as an environment variable
+          IMAGE_TAG=${GITHUB_SHA::8}  # Use commit SHA as the image tag
+          docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ./simple-node-app  # Tag with the commit SHA
+          docker tag ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:latest  # Tag as latest
 
-      - name: Check Current Task Definition
-        id: check_task_def
+      - name: Push Docker image to ECR
         run: |
-          echo "Attempting to describe task definition: persistentpoc-task"
-          CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
-          if [ $? -ne 0 ]; then
-            echo "Error: Unable to fetch the current task definition. Check if the name is correct and if you have the required permissions."
-            exit 1
-          fi
-          echo "Current Task Definition fetched successfully."
+          IMAGE_TAG=${GITHUB_SHA::8}  # Use the same tag for pushing
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG  # Push the SHA-tagged image
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:latest  # Push the latest-tagged image
 
-      - name: Register New Task Definition
-        id: register_task_def
-        run: |
-          echo "Registering new task definition..."
-          if [ -z "$CURRENT_TASK_DEF" ]; then
-            echo "Error: No current task definition found. Skipping registration."
-            exit 1
-          fi
-          # Modify the image in the task definition
-          NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ env.image_digest }}" '...')
-          # Register the new task definition
-          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
-          echo "task_definition_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV  # Set the task definition ARN as an environment variable
+  deploy:
+    runs-on: ubuntu-latest  # Change if using a self-hosted runner
+    needs: build  # Ensure the build job completes first
 
-      - name: Update ECS Service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2  # Check out the code from the GitHub repo
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
+          aws-region: ap-south-1  # Your AWS region
+
+      - name: Deploy to ECS using AWS CLI
         run: |
-          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --task-definition ${{ env.task_definition_arn }}
+          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --task-definition persistentpoc-task:2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
+          AWS_DEFAULT_REGION: ap-south-1  # Your AWS region
