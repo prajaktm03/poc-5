@@ -36,7 +36,7 @@ jobs:
 
       - name: Build, Tag, and Push Docker Image
         env:
-          ECR_REPOSITORY: demo_app_ecr_repo  # Replace with your ECR repo name
+          ECR_REPOSITORY: demo-app-ecr-repo  # Replace with your ECR repo name
           IMAGE_TAG: ${{ github.sha }}
 
         run: |
