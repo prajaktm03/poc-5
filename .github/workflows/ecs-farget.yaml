@@ -24,11 +24,15 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1  # Log in to ECR
+        
+      - name: List Task Definitions
+        run: |
+          aws ecs list-task-definitions --max-results 10
 
       - name: Get Latest Image Digest
         id: get_image_digest
         run: |
-          # Get the latest image digest from the ECR repository
+          echo "Checking for task definition: persistentpoc-task"
           IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
           if [ -z "$IMAGE_DIGEST" ]; then
             echo "Error: Unable to fetch image digest."
@@ -40,10 +44,13 @@ jobs:
       - name: Register New Task Definition
         id: register_task_def
         run: |
-          # Get the current task definition
           CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
+          if [ $? -ne 0 ]; then
+            echo "Error: Unable to fetch the current task definition."
+            exit 1
+          fi
           # Modify the image in the task definition
-          NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ env.image_digest }}" '.taskDefinition.containerDefinitions[0].image = $IMAGE | del(.taskDefinition.taskDefinitionArn) | del(.taskDefinition.revision) | del(.taskDefinition.status) | del(.taskDefinition.requiresAttributes) | del(.taskDefinition.compatibilities) | del(.taskDefinition.registeredAt) | del(.taskDefinition.deregisteredAt) | del(.taskDefinition.taskDefinitionFamily) | del(.taskDefinition.containerDefinitions[0].imagePullPolicy) | .')
+          NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ env.image_digest }}" '...')
           # Register the new task definition
           NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
@@ -51,5 +58,4 @@ jobs:
 
       - name: Update ECS Service
         run: |
-          # Update the ECS service with the new task definition
           aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --task-definition ${{ env.task_definition_arn }}
