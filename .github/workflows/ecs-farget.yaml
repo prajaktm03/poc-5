@@ -1,0 +1,39 @@
+name: Deploy Latest Docker Image to ECS
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow on pushes to the main branch
+  workflow_dispatch:  # Allow manual triggering of the workflow
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest  # Use a GitHub-hosted runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2  # Check out the code from the GitHub repo
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
+          aws-region: us-east-1  # Your AWS region
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1  # Log in to ECR
+
+      - name: Get Latest Image Digest
+        id: get_image_digest
+        run: |
+          # Get the latest image digest from the ECR repository
+          IMAGE_DIGEST=$(aws ecr describe-images --repository-name persistentpoc-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
+          echo "Latest Image Digest: $IMAGE_DIGEST"
+          echo "::set-output name=image_digest::$IMAGE_DIGEST"  # Set the image digest for the next steps
+
+      - name: Deploy to ECS
+        run: |
+          # Update the ECS service with the latest image
+          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --image ${{ steps.login-ecr.outputs.registry }}/persistentpoc-repo:${{ steps.get_image_digest.outputs.image_digest }}
