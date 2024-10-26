@@ -1,48 +1,117 @@
 
-name: CI Pipeline
+name: CI CD Pipeline
 
+
+## Build and Push Docker Image to ECR
 
 on:
-  #push:
-  workflow_dispatch:
-    branches:
-      - main
-  #pull_request:
+  push:
+  #workflow_dispatch:
     branches:
       - main
 
-# Define the jobs that will run
 jobs:
   build:
-    # The environment where this job runs
     runs-on: ubuntu-latest
 
-    # Define environment variables if needed
-    env:
-      NODE_ENV: production
-      BUILD_NUMBER: ${{ github.run_number }}
-
-    # List the steps
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          node-version: '16'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Replace with your AWS region
 
-      - name: Install dependencies
+      - name: List files in the app directory
+        run: ls -la ./App  # Adjust this path if needed
+
+     
+      - name: Install Node.js dependencies
         run: npm install
+        working-directory: ./App  # Adjust this if package.json is in a different directory
 
-      - name: Run tests
-        run: npm test
-
-      - name: Build the project
-        run: npm run build
-
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v3
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v1
         with:
-          name: build-output
-          path: ./dist
+          region: ${{ secrets.AWS_REGION }}  # Region should be passed here
+
+      - name: Build, Tag, and Push Docker Image
+        env:
+          ECR_REPOSITORY: demo-app-ecr-repo  # Replace with your ECR repo name
+          IMAGE_TAG: ${{ github.sha }}
+
+        run: |
+          # Build the Docker image
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./App
+          # Tag the image for ECR with the 'latest' tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:latest
+          # Tag the image for ECR with the SHA tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+          # Push the images to ECR
+          docker push ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:latest
+          docker push ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+
+
+
+
+
+
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get Latest Image URI
+        id: get_image_uri
+        run: |
+          IMAGE_TAG=$(aws ecr describe-images --repository-name demo-app-ecr-repo \
+                    --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' --output text)
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "Error: Unable to fetch the latest image tag."
+            exit 1
+          fi
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo:$IMAGE_TAG"
+          echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Describe Current ECS Task Definition
+        id: describe_task
+        run: |
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition demo-app-task)
+          echo "$TASK_DEFINITION" > current_task_definition.json
+
+      - name: Create New Task Definition JSON
+        id: create_task_def
+        run: |
+          NEW_TASK_DEF=$(cat current_task_definition.json | jq \
+            --arg IMAGE_URI "${LATEST_IMAGE_URI}" '.taskDefinition | 
+            .containerDefinitions[0].image=$IMAGE_URI |
+            del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities)')
+          echo "$NEW_TASK_DEF" > new_task_definition.json
+
+      - name: Register New ECS Task Definition
+        id: register_task_def
+        run: |
+          TASK_DEFINITION_ARN=$(aws ecs register-task-definition --cli-input-json file://new_task_definition.json \
+                                --query "taskDefinition.taskDefinitionArn" --output text)
+          echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
+
+      - name: Deploy New Task Definition to ECS Service
+        run: |
+          aws ecs update-service \
+            --cluster demo-app-cluster \
+            --service cc-demo-app-service \
+            --force-new-deployment \
+            --task-definition ${{ env.TASK_DEFINITION_ARN }}        
