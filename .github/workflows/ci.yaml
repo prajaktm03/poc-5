@@ -93,31 +93,26 @@ jobs:
       - name: Create New Task Definition JSON
         id: create_task_def
         run: |
-          NEW_TASK_DEF=$(jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" '{
-            family: .taskDefinition.family,
-            taskRoleArn: .taskDefinition.taskRoleArn,
-            executionRoleArn: .taskDefinition.executionRoleArn,
-            networkMode: .taskDefinition.networkMode,
-            containerDefinitions: (.taskDefinition.containerDefinitions // [] | map(if .name == "your_container_name" then .image = $IMAGE_URI else . end)),
-            volumes: .taskDefinition.volumes,
-            placementConstraints: .taskDefinition.placementConstraints,
-            requiresCompatibilities: .taskDefinition.requiresCompatibilities,
-            cpu: .taskDefinition.cpu,
-            memory: .taskDefinition.memory,
-            tags: .taskDefinition.tags,
-            pidMode: .taskDefinition.pidMode,
-            ipcMode: .taskDefinition.ipcMode,
-            proxyConfiguration: .taskDefinition.proxyConfiguration,
-            inferenceAccelerators: .taskDefinition.inferenceAccelerators,
-            ephemeralStorage: .taskDefinition.ephemeralStorage,
-            runtimePlatform: .taskDefinition.runtimePlatform
-          }' current_task_definition.json)
-
-          if [ -z "$NEW_TASK_DEF" ]; then
-            echo "Error: Failed to create new task definition JSON."
-            exit 1
-          fi
-
+          NEW_TASK_DEF=$(cat current_task_definition.json | jq \
+            --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" '{
+              family: .family,
+              taskRoleArn: (.taskRoleArn // empty),
+              executionRoleArn: (.executionRoleArn // empty),
+              networkMode: .networkMode,
+              containerDefinitions: (.containerDefinitions | map(if .name == "your_container_name" then .image = $IMAGE_URI else . end)),
+              volumes: .volumes,
+              placementConstraints: .placementConstraints,
+              requiresCompatibilities: .requiresCompatibilities,
+              cpu: .cpu,
+              memory: .memory,
+              tags: (.tags // []),
+              pidMode: (.pidMode // empty),
+              ipcMode: (.ipcMode // empty),
+              proxyConfiguration: (.proxyConfiguration // empty),
+              inferenceAccelerators: (.inferenceAccelerators // []),
+              ephemeralStorage: (.ephemeralStorage // empty),
+              runtimePlatform: (.runtimePlatform // empty)
+            }')
           echo "$NEW_TASK_DEF" > new_task_definition.json
 
       - name: Register New ECS Task Definition
