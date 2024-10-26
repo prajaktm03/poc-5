@@ -1,10 +1,11 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:  # Allow manual trigger of the deployment workflow
+  #push:
+    #branches:
+      #- main
+  
 
 jobs:
   build:
