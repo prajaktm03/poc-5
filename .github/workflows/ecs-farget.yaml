@@ -42,6 +42,15 @@ jobs:
           echo "Latest Image Digest: $IMAGE_DIGEST"
           echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV  # Set the image digest as an environment variable
 
+      - name: Check Current Task Definition
+        run: |
+          CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
+          if [ $? -ne 0 ]; then
+            echo "Error: Unable to fetch the current task definition. Please check the task definition name."
+            exit 1
+          fi
+          echo "Current Task Definition fetched successfully."
+
       - name: Register New Task Definition
         id: register_task_def
         run: |
