@@ -29,11 +29,11 @@ jobs:
         id: get_image_digest
         run: |
           # Get the latest image digest from the ECR repository
-          IMAGE_DIGEST=$(aws ecr describe-images --repository-name persistentpoc-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
+          IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
           echo "Latest Image Digest: $IMAGE_DIGEST"
           echo "::set-output name=image_digest::$IMAGE_DIGEST"  # Set the image digest for the next steps
 
       - name: Deploy to ECS
         run: |
           # Update the ECS service with the latest image
-          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --image ${{ steps.login-ecr.outputs.registry }}/persistentpoc-repo:${{ steps.get_image_digest.outputs.image_digest }}
+          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --image ${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ steps.get_image_digest.outputs.image_digest }}
