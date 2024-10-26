@@ -1,13 +1,14 @@
-name: Deploy Latest Docker Image to ECS
+name: Deploy to ECS
 
 on:
   push:
     branches:
       - main  # Trigger on pushes to the main branch
-  workflow_dispatch:  # Allow manual triggering of the workflow
+
+  workflow_dispatch:  # Allow manual trigger of the workflow
 
 jobs:
-  deploy:
+  build_and_push:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,26 +26,58 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Get Latest Image Digest
-        id: get_image_digest
+      - name: Build and Tag Docker Image
         run: |
-          IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageDigest' --output text)
-          echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV
+          IMAGE_TAG=${{ github.sha }}
+          REPOSITORY_URL=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo
+          docker build -t $REPOSITORY_URL:$IMAGE_TAG .
+          docker tag $REPOSITORY_URL:$IMAGE_TAG $REPOSITORY_URL:latest
 
-      - name: Get Current Task Definition
-        id: get_task_def
+      - name: Push Docker Image to ECR
         run: |
-          TASK_DEF_ARN=$(aws ecs describe-services --cluster demo-app-cluster --services cc-demo-app-service --query "services[0].taskDefinition" --output text)
-          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_ENV
+          IMAGE_TAG=${{ github.sha }}
+          REPOSITORY_URL=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo
+          docker push $REPOSITORY_URL:$IMAGE_TAG
+          docker push $REPOSITORY_URL:latest
 
-      - name: Register New Task Definition
-        id: register_task_def
-        run: |
-          CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition ${{ env.task_def_arn }} --query "taskDefinition")
-          NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo@${{ env.image_digest }}" '.containerDefinitions[0].image = $IMAGE | del(.revision, .status, .taskDefinitionArn, .requiresAttributes, .compatibilities, .registeredBy, .registeredAt)')
-          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "new_task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build_and_push
 
-      - name: Update ECS Service
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get Latest Image URI
+        id: get_image_uri
         run: |
-          aws ecs update-service --cluster demo-app-cluster --service cc-demo-app-service --force-new-deployment --task-definition ${{ env.new_task_def_arn }}
+          IMAGE_URI=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' --output text)
+          echo "LATEST_IMAGE_URI=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo:$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Update ECS Task Definition
+        id: update_task_def
+        run: |
+          TASK_DEFINITION_ARN=$(aws ecs describe-task-definition --task-definition demo-app-task --query "taskDefinition.taskDefinitionArn" --output text)
+          NEW_TASK_DEF=$(aws ecs describe-task-definition --task-definition demo-app-task | \
+                         jq --arg IMAGE_URI "${LATEST_IMAGE_URI}" '.taskDefinition | 
+                         .containerDefinitions[0].image=$IMAGE_URI |
+                         del(.revision, .status, .requiresAttributes, .compatibilities, .taskDefinitionArn)')
+
+          NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEF | \
+                             aws ecs register-task-definition \
+                             --cli-input-json file://<(cat /dev/stdin) \
+                             --query 'taskDefinition.taskDefinitionArn' \
+                             --output text)
+          echo "TASK_DEFINITION_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+
+      - name: Deploy New Task Definition to ECS
+        run: |
+          aws ecs update-service \
+            --cluster demo-app-cluster \
+            --service cc-demo-app-service \
+            --force-new-deployment \
+            --task-definition ${{ env.TASK_DEFINITION_ARN }}
