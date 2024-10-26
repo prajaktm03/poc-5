@@ -1,7 +1,7 @@
 name: New Build and Push Docker Image to ECR
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build:
@@ -18,15 +18,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Debug AWS Account ID and Region
-        run: |
-          echo "AWS Account ID: ${{ secrets.AWS_ACCOUNT_ID }}"
-          echo "AWS Region: ${{ secrets.AWS_REGION }}"
+      - name: List files in the app directory
+        run: ls -la ./App  # Adjust this path if needed
+
+      - name: Install Node.js dependencies
+        run: npm install
+        working-directory: ./App  # Adjust this if package.json is in a different directory
 
       - name: Log in to Amazon ECR
         id: ecr-login
         run: |
-          echo "Logging into ECR URL: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
-      # Remaining steps for building and pushing the Docker image...
+      - name: Build, Tag, and Push Docker Image
+        env:
+          ECR_REPOSITORY: demo-app-ecr-repo  # Replace with your ECR repo name
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+        run: |
+          # Build the Docker image
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./App
+          # Tag the image for ECR with the 'latest' tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Tag the image for ECR with the SHA tag
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Push the images to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Debug List pushed images
+        run: |
+          aws ecr describe-images --repository-name demo-app-ecr-repo --output json
