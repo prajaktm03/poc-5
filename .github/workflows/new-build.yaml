@@ -1,7 +1,7 @@
 name: New Build and Push Docker Image to ECR
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,10 +34,9 @@ jobs:
         env:
           ECR_REPOSITORY: demo-app-ecr-repo  # Replace with your ECR repo name
           IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
         run: |
-          # Define the ECR registry URL
-          #ECR_REGISTRY="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com"
           # Build the Docker image
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./App
           # Tag the image for ECR with the 'latest' tag
