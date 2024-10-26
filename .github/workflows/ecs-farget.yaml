@@ -30,6 +30,10 @@ jobs:
         run: |
           # Get the latest image digest from the ECR repository
           IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
+          if [ -z "$IMAGE_DIGEST" ]; then
+            echo "Error: Unable to fetch image digest."
+            exit 1
+          fi
           echo "Latest Image Digest: $IMAGE_DIGEST"
           echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV  # Set the image digest as an environment variable
 
