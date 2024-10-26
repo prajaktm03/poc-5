@@ -13,18 +13,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1  # Replace with your AWS region
+
       - name: Log in to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v1
+        with:
+          region: ${{ secrets.AWS_REGION }}  # Region should be passed here
 
       - name: Build, Tag, and Push Docker Image
         env:
           ECR_REPOSITORY: demo_app_ecr_repo  # Replace with your ECR repo name
-          AWS_REGION: us-east-1              # Replace with your region
           IMAGE_TAG: ${{ github.sha }}
 
         run: |
-          docker login -u AWS -p ${{ secrets.AWS_ECR_PASSWORD }} ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
           # Build the Docker image
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
           # Tag the image for ECR
