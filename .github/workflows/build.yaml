@@ -50,3 +50,8 @@ jobs:
           # Push the images to ECR
           docker push ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:latest
           docker push ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Debug List pushed images
+        run: |
+          aws ecr describe-images --repository-name demo-app-ecr-repo --output json
+
