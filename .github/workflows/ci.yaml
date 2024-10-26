@@ -79,36 +79,45 @@ jobs:
         id: describe_task
         run: |
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition demo-app-task)
+          if [ $? -ne 0 ]; then
+            echo "Error: Unable to describe the task definition."
+            exit 1
+          fi
           echo "$TASK_DEFINITION" > current_task_definition.json
 
       - name: Output Current Task Definition
         run: |
           echo "Current Task Definition:"
-          cat current_task_definition.json
+          cat current_task_definition.json || echo "Error: Unable to read current_task_definition.json"
 
       - name: Create New Task Definition JSON
         id: create_task_def
         run: |
-          NEW_TASK_DEF=$(cat current_task_definition.json | jq \
-            --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" '{
-              family: .taskDefinition.family,
-              taskRoleArn: .taskDefinition.taskRoleArn,
-              executionRoleArn: .taskDefinition.executionRoleArn,
-              networkMode: .taskDefinition.networkMode,
-              containerDefinitions: (.taskDefinition.containerDefinitions // [] | map(if .name == "your_container_name" then .image = $IMAGE_URI else . end)),
-              volumes: .taskDefinition.volumes,
-              placementConstraints: .taskDefinition.placementConstraints,
-              requiresCompatibilities: .taskDefinition.requiresCompatibilities,
-              cpu: .taskDefinition.cpu,
-              memory: .taskDefinition.memory,
-              tags: .taskDefinition.tags,
-              pidMode: .taskDefinition.pidMode,
-              ipcMode: .taskDefinition.ipcMode,
-              proxyConfiguration: .taskDefinition.proxyConfiguration,
-              inferenceAccelerators: .taskDefinition.inferenceAccelerators,
-              ephemeralStorage: .taskDefinition.ephemeralStorage,
-              runtimePlatform: .taskDefinition.runtimePlatform
-            }')
+          NEW_TASK_DEF=$(jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" '{
+            family: .taskDefinition.family,
+            taskRoleArn: .taskDefinition.taskRoleArn,
+            executionRoleArn: .taskDefinition.executionRoleArn,
+            networkMode: .taskDefinition.networkMode,
+            containerDefinitions: (.taskDefinition.containerDefinitions // [] | map(if .name == "your_container_name" then .image = $IMAGE_URI else . end)),
+            volumes: .taskDefinition.volumes,
+            placementConstraints: .taskDefinition.placementConstraints,
+            requiresCompatibilities: .taskDefinition.requiresCompatibilities,
+            cpu: .taskDefinition.cpu,
+            memory: .taskDefinition.memory,
+            tags: .taskDefinition.tags,
+            pidMode: .taskDefinition.pidMode,
+            ipcMode: .taskDefinition.ipcMode,
+            proxyConfiguration: .taskDefinition.proxyConfiguration,
+            inferenceAccelerators: .taskDefinition.inferenceAccelerators,
+            ephemeralStorage: .taskDefinition.ephemeralStorage,
+            runtimePlatform: .taskDefinition.runtimePlatform
+          }' current_task_definition.json)
+
+          if [ -z "$NEW_TASK_DEF" ]; then
+            echo "Error: Failed to create new task definition JSON."
+            exit 1
+          fi
+
           echo "$NEW_TASK_DEF" > new_task_definition.json
 
       - name: Register New ECS Task Definition
@@ -116,6 +125,10 @@ jobs:
         run: |
           TASK_DEFINITION_ARN=$(aws ecs register-task-definition --cli-input-json file://new_task_definition.json \
                                 --query "taskDefinition.taskDefinitionArn" --output text)
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to register new task definition."
+            exit 1
+          fi
           echo "TASK_DEFINITION_ARN=$TASK_DEFINITION_ARN" >> $GITHUB_ENV
 
       - name: Deploy New Task Definition to ECS Service
@@ -125,3 +138,7 @@ jobs:
             --service cc-demo-app-service \
             --force-new-deployment \
             --task-definition ${{ env.TASK_DEFINITION_ARN }}
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to update ECS service."
+            exit 1
+          fi
