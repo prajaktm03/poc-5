@@ -28,9 +28,8 @@ jobs:
           echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Debug Print fetched IMAGE_TAG
-        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
+        run: echo "Fetched IMAGE_TAG is: ${{ env.LATEST_IMAGE_URI }}"
      
-
       - name: Describe Current ECS Task Definition
         id: describe_task
         run: |
@@ -47,6 +46,9 @@ jobs:
             del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             current_task_definition.json)
           echo "$NEW_TASK_DEF" > new_task_definition.json
+
+      - name: Print New Task Definition
+        run: cat new_task_definition.json
 
       - name: Register New ECS Task Definition
         id: register_task_def
@@ -72,7 +74,4 @@ jobs:
           fi
 
       - name: Debug Print fetched IMAGE_TAG
-        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
-        
-
-  
+        run: echo "Fetched IMAGE_TAG is: ${{ env.LATEST_IMAGE_URI }}"
