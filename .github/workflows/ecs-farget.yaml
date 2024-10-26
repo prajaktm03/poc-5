@@ -27,8 +27,8 @@ jobs:
           IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/demo-app-ecr-repo:$IMAGE_TAG"
           echo "LATEST_IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      - name: Debug: Print fetched IMAGE_TAG
-         run: echo "Fetched IMAGE_TAG is: ${{ env.LATEST_IMAGE_URI }}"
+      - name: Debug Print fetched IMAGE_TAG
+        run: echo "Fetched IMAGE_TAG is:${{ env.LATEST_IMAGE_URI }}"
      
 
       - name: Describe Current ECS Task Definition
