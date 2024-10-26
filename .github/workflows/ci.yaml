@@ -87,10 +87,11 @@ jobs:
       - name: Create New Task Definition JSON
         id: create_task_def
         run: |
+          # Create a new task definition based on the current one, ensuring to filter out unwanted parameters
           NEW_TASK_DEF=$(jq --arg IMAGE_URI "${{ env.LATEST_IMAGE_URI }}" \
             '.taskDefinition | 
             .containerDefinitions[0].image=$IMAGE_URI |
-            del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities)' \
+            del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             current_task_definition.json)
           echo "$NEW_TASK_DEF" > new_task_definition.json
 
