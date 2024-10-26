@@ -27,14 +27,14 @@ jobs:
       - name: Build Docker image
         run: |
           IMAGE_TAG=${GITHUB_SHA::8}  # Use commit SHA as the image tag
-          docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ./simple-node-app  # Tag with the commit SHA
-          docker tag ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:latest  # Tag as latest
+          docker build -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ./simple-node-app  # Tag with the commit SHA
+          docker tag ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/persistentpoc-repo:latest  # Tag as latest
 
       - name: Push Docker image to ECR
         run: |
           IMAGE_TAG=${GITHUB_SHA::8}  # Use the same tag for pushing
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG  # Push the SHA-tagged image
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/persistentpoc-repo:latest  # Push the latest-tagged image
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/persistentpoc-repo:$IMAGE_TAG  # Push the SHA-tagged image
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/persistentpoc-repo:latest  # Push the latest-tagged image
 
   deploy:
     runs-on: ubuntu-latest  # Change if using a self-hosted runner
@@ -49,7 +49,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
-          aws-region: ap-south-1  # Your AWS region
+          aws-region: us-east-1  # Your AWS region
 
       - name: Deploy to ECS using AWS CLI
         run: |
@@ -57,4 +57,4 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
-          AWS_DEFAULT_REGION: ap-south-1  # Your AWS region
+          AWS_DEFAULT_REGION: us-east-1  # Your AWS region
