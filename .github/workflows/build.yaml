@@ -41,7 +41,7 @@ jobs:
 
         run: |
           # Build the Docker image
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG ./App
           # Tag the image for ECR
           docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.ecr-login.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
           # Push the image to ECR
