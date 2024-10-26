@@ -27,6 +27,7 @@ jobs:
         
       - name: List Task Definitions
         run: |
+          echo "Listing all task definitions..."
           aws ecs list-task-definitions --max-results 10
 
       - name: Get Latest Image Digest
