@@ -41,10 +41,11 @@ jobs:
         id: create_task_def
         run: |
           NEW_TASK_DEF=$(cat current_task_definition.json | jq \
-            --arg IMAGE_URI "${LATEST_IMAGE_URI}" '.taskDefinition | 
-            .containerDefinitions[0].image=$IMAGE_URI |
-            del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities)')
+          --arg IMAGE_URI "${LATEST_IMAGE_URI}" '.taskDefinition |
+          .containerDefinitions[0].image=$IMAGE_URI |
+          del(.revision, .taskDefinitionArn, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
           echo "$NEW_TASK_DEF" > new_task_definition.json
+
 
       - name: Register New ECS Task Definition
         id: register_task_def
