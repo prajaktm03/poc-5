@@ -29,6 +29,7 @@ jobs:
         id: ecr-login
         run: |
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          echo "Login successful"
 
       - name: Build, Tag, and Push Docker Image
         env:
@@ -48,5 +49,9 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Debug List pushed images
+        run: |
+          aws ecr describe-images --repository-name demo-app-ecr-repo --output json
+
+      - name: Verify Image Exists in ECR
         run: |
           aws ecr describe-images --repository-name demo-app-ecr-repo --output json
