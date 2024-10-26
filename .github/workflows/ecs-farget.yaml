@@ -19,7 +19,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS Access Key from GitHub secrets
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS Secret Key from GitHub secrets
-          aws-region: us-east-1  # Your AWS region
+          aws-region: ap-south-1  # Your AWS region
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -31,9 +31,21 @@ jobs:
           # Get the latest image digest from the ECR repository
           IMAGE_DIGEST=$(aws ecr describe-images --repository-name demo-app-ecr-repo --query 'sort_by(imageDetails[*], &imagePushedAt)[-1].imageDigest' --output text)
           echo "Latest Image Digest: $IMAGE_DIGEST"
-          echo "::set-output name=image_digest::$IMAGE_DIGEST"  # Set the image digest for the next steps
+          echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV  # Set the image digest as an environment variable
 
-      - name: Deploy to ECS
+      - name: Register New Task Definition
+        id: register_task_def
         run: |
-          # Update the ECS service with the latest image
-          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --image ${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ steps.get_image_digest.outputs.image_digest }}
+          # Get the current task definition
+          CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
+          # Modify the image in the task definition
+          NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "${{ steps.login-ecr.outputs.registry }}/demo-app-ecr-repo:${{ env.image_digest }}" '.taskDefinition.containerDefinitions[0].image = $IMAGE | del(.taskDefinition.taskDefinitionArn) | del(.taskDefinition.revision) | del(.taskDefinition.status) | del(.taskDefinition.requiresAttributes) | del(.taskDefinition.compatibilities) | del(.taskDefinition.registeredAt) | del(.taskDefinition.deregisteredAt) | del(.taskDefinition.taskDefinitionFamily) | del(.taskDefinition.containerDefinitions[0].imagePullPolicy) | .')
+          # Register the new task definition
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "New Task Definition ARN: $NEW_TASK_DEF_ARN"
+          echo "task_definition_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV  # Set the task definition ARN as an environment variable
+
+      - name: Update ECS Service
+        run: |
+          # Update the ECS service with the new task definition
+          aws ecs update-service --cluster persistentpoc-cluster --service persistentpoc-svc --force-new-deployment --task-definition ${{ env.task_definition_arn }}
