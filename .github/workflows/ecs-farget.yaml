@@ -26,6 +26,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1  # Log in to ECR
         
       - name: List Task Definitions
+        id: list_tasks
         run: |
           echo "Listing all task definitions..."
           aws ecs list-task-definitions --max-results 10
@@ -43,10 +44,12 @@ jobs:
           echo "image_digest=$IMAGE_DIGEST" >> $GITHUB_ENV  # Set the image digest as an environment variable
 
       - name: Check Current Task Definition
+        id: check_task_def
         run: |
+          echo "Attempting to describe task definition: persistentpoc-task"
           CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
           if [ $? -ne 0 ]; then
-            echo "Error: Unable to fetch the current task definition. Please check the task definition name."
+            echo "Error: Unable to fetch the current task definition. Check if the name is correct and if you have the required permissions."
             exit 1
           fi
           echo "Current Task Definition fetched successfully."
@@ -54,9 +57,9 @@ jobs:
       - name: Register New Task Definition
         id: register_task_def
         run: |
-          CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition persistentpoc-task)
-          if [ $? -ne 0 ]; then
-            echo "Error: Unable to fetch the current task definition."
+          echo "Registering new task definition..."
+          if [ -z "$CURRENT_TASK_DEF" ]; then
+            echo "Error: No current task definition found. Skipping registration."
             exit 1
           fi
           # Modify the image in the task definition
