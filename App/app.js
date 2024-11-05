@@ -7,7 +7,7 @@ const port = 3000;
 const server = http.createServer((req, res) => {
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello World & Happy Diwali !!!  \n');
+  res.end('Hello World & Happy Diwali & Happy New Year !!!  \n');
 });
 
 server.listen(port, hostname, () => {
